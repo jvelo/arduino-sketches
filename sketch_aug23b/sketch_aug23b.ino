@@ -1,9 +1,14 @@
 #include "LedControl.h"
 #include <dht.h>
+#include <SFE_BMP180.h>
+#include <Wire.h>
 
 dht DHT;
+SFE_BMP180 bmp180;
 
 #define DHT22_PIN 3
+
+#define ALTITUDE 252.0 // Croix rousse
 
 // Arduino Pin 7 to DIN, 6 to Clk, 5 to LOAD, no.of devices is 1
 LedControl lc=LedControl(7,6,5,1);
@@ -17,10 +22,18 @@ void setup() {
   lc.clearDisplay(0);
   
   Serial.begin(9600);
+  Serial.println("--- Booting ---");
+  
+  if (!bmp180.begin()) {
+    Serial.println("BMP180 init fail\n\n");
+  }
 }
 
 void loop() {
 
+  char bmpStatus;
+  double T,P,p0,a;
+  
   int chk = DHT.read22(DHT22_PIN);
   switch (chk)
   {
@@ -31,14 +44,51 @@ void loop() {
       printValue(DHT.humidity, 2);
       break;
     case DHTLIB_ERROR_CHECKSUM: 
-      Serial.print("Checksum error,\t"); 
+      Serial.print("DHT Checksum error,\t"); 
       break;
     case DHTLIB_ERROR_TIMEOUT: 
-      Serial.print("Time out error,\t"); 
+      Serial.print("DHT Time out error,\t"); 
       break;
     default: 
-      Serial.print("Unknown error,\t"); 
+      Serial.print("DHT Unknown error,\t"); 
       break;
+  }
+  
+  bmpStatus = bmp180.startTemperature();
+  if (bmpStatus != 0) {
+    delay(bmpStatus);
+    
+    bmpStatus = bmp180.getTemperature(T);
+    if (bmpStatus != 0) {
+      // Print out the measurement:
+      Serial.print("temperature: ");
+      Serial.print(T,2);
+      Serial.println(" deg C");
+    }
+    else {
+      Serial.println("BMP Error retrieving temperature measurement\n");
+    }
+  }
+  else {
+    Serial.println("BMP Error starting temperature measurement\n");
+  }
+  
+  bmpStatus = bmp180.startPressure(3);
+  if (bmpStatus != 0) {
+     delay(bmpStatus);
+     bmpStatus = bmp180.getPressure(P,T);
+     if (bmpStatus != 0) {
+          // Print out the measurement:
+          Serial.print("absolute pressure: ");
+          Serial.print(P,2);
+          Serial.println(" mb");
+     }
+     else {
+       Serial.println("BMP Error retrieving pressure measurement\n");
+     }
+  }
+  else {
+    Serial.println("BMP error starting pressure measurement");
   }
 
   delay(1000);
