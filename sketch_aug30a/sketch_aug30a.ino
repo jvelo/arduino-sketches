@@ -6,6 +6,7 @@
 #include <Base64.h>
 #include <Streaming.h>
 #include <ArduinoJson.h>
+#include <MemoryFree.h>
 
 dht DHT;
 SFE_BMP180 bmp180;
@@ -16,14 +17,14 @@ SFE_BMP180 bmp180;
 // Arduino Pin 7 to DIN, 6 to Clk, 5 to LOAD, no.of devices is 1
 LedControl lc = LedControl(7, 6, 5, 1);
 
-#define DEBUG false
+#define DEBUG true
 
 // Mustnt conflict / collide with our message payload data. Fine if we use base64 library ^^ above
-char field_separator = ',';
-char command_separator = ';';
+char fieldSeparator = '|';
+char commandSeparator = ';';
 
 // Attach a new CmdMessenger object to the default Serial port
-CmdMessenger cmdMessenger = CmdMessenger(Serial, field_separator, command_separator);
+CmdMessenger cmdMessenger = CmdMessenger(Serial, fieldSeparator, commandSeparator);
 
 // -------- Commands ---------
 
@@ -64,7 +65,7 @@ void unknownCmd()
 
 // ---------------------------
 
-void attach_callbacks(messengerCallbackFunction* callbacks)
+void attachCallbacks(messengerCallbackFunction* callbacks)
 {
   int i = 0;
   int offset = kSEND_CMDS_END;
@@ -72,6 +73,15 @@ void attach_callbacks(messengerCallbackFunction* callbacks)
   {
     cmdMessenger.attach(offset + i, callbacks[i]);
     i++;
+  }
+}
+
+void sendDebugValue(String name, String unit, double value) {
+  if (DEBUG) {
+    String message = name + String(": ") + String(value) + String(" ") + unit;
+    char charBuf[message.length()+1];
+    message.toCharArray(charBuf, message.length()+1) ;
+    cmdMessenger.sendCmd(kINFO_MESSAGE, charBuf);
   }
 }
 
@@ -90,7 +100,7 @@ void setup() {
   cmdMessenger.attach(unknownCmd);
 
   // Attach my application's user-defined callback methods
-  attach_callbacks(messengerCallbacks);
+  attachCallbacks(messengerCallbacks);
 
   arduinoReady();
 
@@ -120,15 +130,6 @@ void timeout()
   counter ++;
 }
 
-void sendDebugValue(String name, String unit, double value) {
-  if (DEBUG) {
-    String message = name + String(": ") + String(value) + String(" ") + unit;
-    char charBuf[message.length()+1];
-    message.toCharArray(charBuf, message.length()+1) ;
-    cmdMessenger.sendCmd(kINFO_MESSAGE, charBuf);
-  }
-}
-
 void loop() {
 
   // Process incoming serial data, if any
@@ -142,7 +143,7 @@ void loop() {
   }
 
   char bmpStatus;
-  double T, P, p0, a;
+  double T, P;
 
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
@@ -209,6 +210,8 @@ void loop() {
   char buffer[256];
   root.printTo(buffer, sizeof(buffer));
   cmdMessenger.sendCmd(kSENDORS_DATA, buffer);
+  
+  sendDebugValue("Memory", "bytes", freeMemory());
 
   delay(1000);
 }
